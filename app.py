@@ -42,6 +42,9 @@ BOT_CODE = '''
 import json
 import time
 import os
+import re
+import subprocess
+import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -60,8 +63,33 @@ def save_status(status="", detail="", online_elapsed=0):
         os.fsync(f.fileno())
     print(f"[BOT] status={status} | detail={detail}")
 
+def get_chrome_version():
+    cmds = [
+        ["google-chrome", "--version"],
+        ["google-chrome-stable", "--version"],
+        ["chromium-browser", "--version"],
+        ["chromium", "--version"],
+        ["/usr/bin/google-chrome", "--version"],
+        ["/usr/bin/chromium-browser", "--version"],
+    ]
+    for cmd in cmds:
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+            match = re.search(r"(\\d+)\\.\\d+\\.\\d+\\.\\d+", out)
+            if match:
+                version = int(match.group(1))
+                print(f"[BOT] Detected Chrome version: {version}")
+                return version
+        except:
+            continue
+    print("[BOT] Could not detect Chrome version, using default")
+    return None
+
 def run_relentless_headless_bot():
     print("Starting bot...")
+    save_status(status="detecting_chrome")
+
+    chrome_version = get_chrome_version()
     save_status(status="installing_driver")
 
     options = Options()
@@ -75,7 +103,11 @@ def run_relentless_headless_bot():
     options.page_load_strategy = "eager"
 
     try:
-        service = Service(ChromeDriverManager().install())
+        if chrome_version:
+            driver_path = ChromeDriverManager(driver_version=str(chrome_version)).install()
+        else:
+            driver_path = ChromeDriverManager().install()
+        service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=options)
     except Exception as e:
         save_status(status="driver_error", detail=str(e)[:80])
@@ -195,46 +227,35 @@ online_elapsed = status.get("online_elapsed", 0)
 st.caption(f"🔧 Raw status: `{phase}` | bot process: `{is_bot_running()}`")
 st.divider()
 
-# --- Status Card ---
 if phase == "Online":
     elapsed_min = online_elapsed // 60
     elapsed_sec = online_elapsed % 60
     st.success(f"🟢 Server is **Online**")
     st.info(f"⏱️ Online for: **{elapsed_min}m {elapsed_sec}s** &nbsp;|&nbsp; {detail}")
-
 elif phase == "restarting":
     st.warning(f"🔄 **Restarting server...** 30 minutes reached.")
-
 elif phase == "clicked_button":
     st.success(f"✅ **{detail}**")
-
 elif "queue" in phase.lower():
     st.warning(f"🕐 **{phase}**")
-
 elif phase in ["Loading", "Preparing", "Starting"]:
     st.info(f"⏳ Server is **{phase}**...")
-
 elif phase == "Offline":
     st.error(f"🔴 Server is **Offline** — attempting to start...")
-
 elif phase == "monitoring":
-    st.info(f"👀 Monitoring Aternos... waiting for status.")
-
+    st.info(f"👀 Monitoring Aternos...")
 elif phase == "loading_page":
     st.info("🌐 Loading Aternos page...")
-
+elif phase == "detecting_chrome":
+    st.info("🔍 Detecting Chrome version...")
 elif phase == "installing_driver":
-    st.info("📦 Installing ChromeDriver...")
-
+    st.info("📦 Installing matching ChromeDriver...")
 elif phase == "driver_error":
     st.error(f"❌ ChromeDriver error: {detail}")
-
 elif phase == "crashed":
     st.error(f"💀 Bot crashed: {detail}")
-
 elif phase == "starting":
-    st.info("🚀 Bot is starting up...")
-
+    st.info("🚀 Bot starting up...")
 else:
     st.info(f"🤖 {phase} {detail}")
 
