@@ -147,12 +147,15 @@ def run_relentless_headless_bot():
                 status_elements = driver.find_elements(By.CLASS_NAME, "statuslabel-label")
                 status = status_elements[0].text.strip() if status_elements else ""
 
+                # --- ONLY CHANGE: skip any button whose text is exactly "1" ---
                 confirms = driver.find_elements(By.CSS_SELECTOR, ".btn-success, #start")
                 for btn in confirms:
                     if btn.is_displayed():
+                        btn_text = btn.text.strip()
+                        if btn_text == "1":
+                            continue
                         driver.execute_script("arguments[0].click();", btn)
-                        btn_text = btn.text.strip() or "Start/Confirm"
-                        save_status(status="clicked_button", detail=f"Clicked: {btn_text}", current_state=f"Clicked: {btn_text}")
+                        save_status(status="clicked_button", detail=f"Clicked: {btn_text or 'Start/Confirm'}", current_state=f"Clicked: {btn_text or 'Start/Confirm'}")
                         online_start_time = None
 
                 if status == "Online":
@@ -227,7 +230,6 @@ current_state = status.get("current_state", "")
 
 st.caption(f"🔧 Raw status: `{phase}` | bot process: `{is_bot_running()}`")
 
-# --- Current State Banner (always visible) ---
 if current_state:
     st.info(f"📡 Current State: **{current_state}**")
 
