@@ -1,0 +1,248 @@
+import streamlit as st
+import time
+import os
+import json
+import subprocess
+import sys
+
+STATUS_FILE = "aternos_status.json"
+BOT_FILE = "aternos_bot.py"
+
+def load_status():
+    try:
+        if os.path.exists(STATUS_FILE):
+            with open(STATUS_FILE, "r") as f:
+                return json.load(f)
+    except:
+        pass
+    return {"status": "starting", "detail": "", "online_elapsed": 0}
+
+def is_bot_running():
+    if not os.path.exists("aternos_bot.pid"):
+        return False
+    try:
+        with open("aternos_bot.pid", "r") as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return True
+    except:
+        return False
+
+def start_bot():
+    proc = subprocess.Popen(
+        [sys.executable, BOT_FILE],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    with open("aternos_bot.pid", "w") as f:
+        f.write(str(proc.pid))
+    print(f"[MAIN] Bot started with PID {proc.pid}")
+
+BOT_CODE = '''
+import json
+import time
+import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+
+COOKIE_FILE = "cookies.json"
+SERVER_NAME = "meracraft-ox3w"
+RESTART_INTERVAL = 30 * 60
+STATUS_FILE = "aternos_status.json"
+
+def save_status(status="", detail="", online_elapsed=0):
+    with open(STATUS_FILE, "w") as f:
+        json.dump({"status": status, "detail": detail, "online_elapsed": int(online_elapsed)}, f)
+        f.flush()
+        os.fsync(f.fileno())
+    print(f"[BOT] status={status} | detail={detail}")
+
+def run_relentless_headless_bot():
+    print("Starting bot...")
+    save_status(status="installing_driver")
+
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    options.page_load_strategy = "eager"
+
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception as e:
+        save_status(status="driver_error", detail=str(e)[:80])
+        return
+
+    online_start_time = None
+
+    try:
+        save_status(status="loading_page")
+        driver.get("https://aternos.org/servers/")
+
+        if os.path.exists(COOKIE_FILE):
+            with open(COOKIE_FILE, "r") as f:
+                cookies = json.load(f)
+                for cookie in cookies:
+                    clean_cookie = {k: v for k, v in cookie.items() if k not in ["sameSite", "size"]}
+                    try:
+                        driver.add_cookie(clean_cookie)
+                    except:
+                        pass
+
+        driver.refresh()
+        save_status(status="monitoring", detail="Watching Aternos...")
+
+        while True:
+            try:
+                if "/servers/" in driver.current_url:
+                    server_cards = driver.find_elements(By.XPATH,
+                        f"//*[contains(@class, \'server-name\') and contains(text(), \'{SERVER_NAME}\')]")
+                    if server_cards:
+                        driver.execute_script("arguments[0].click();", server_cards[0])
+                        time.sleep(1)
+
+                status_elements = driver.find_elements(By.CLASS_NAME, "statuslabel-label")
+                status = status_elements[0].text.strip() if status_elements else ""
+
+                confirms = driver.find_elements(By.CSS_SELECTOR, ".btn-success, #start")
+                for btn in confirms:
+                    if btn.is_displayed():
+                        driver.execute_script("arguments[0].click();", btn)
+                        btn_text = btn.text.strip() or "Start/Confirm"
+                        print(f"Clicked: {btn_text}")
+                        save_status(status="clicked_button", detail=f"Clicked: {btn_text}")
+                        online_start_time = None
+
+                if status == "Online":
+                    if online_start_time is None:
+                        online_start_time = time.time()
+
+                    elapsed = time.time() - online_start_time
+                    remaining = max(0, RESTART_INTERVAL - elapsed)
+
+                    if elapsed >= RESTART_INTERVAL:
+                        restart_btn = driver.find_elements(By.ID, "restart")
+                        if restart_btn and restart_btn[0].is_displayed():
+                            driver.execute_script("arguments[0].click();", restart_btn[0])
+                            save_status(status="restarting", detail="30 min reached, restarting...")
+                            online_start_time = None
+                    else:
+                        save_status(
+                            status="Online",
+                            detail=f"Restart in {int(remaining//60)}m {int(remaining%60)}s",
+                            online_elapsed=int(elapsed)
+                        )
+                else:
+                    if status != "Online":
+                        online_start_time = None
+
+                    display_status = status
+                    if "Waiting in queue" in status:
+                        q_pos = driver.find_elements(By.CLASS_NAME, "queue-position")
+                        q_time = driver.find_elements(By.CLASS_NAME, "queue-time")
+                        pos_text = q_pos[0].text.strip() if q_pos else "..."
+                        time_text = q_time[0].text.strip() if q_time else "..."
+                        display_status = f"Waiting in queue [{pos_text}] ({time_text})"
+
+                    if display_status:
+                        save_status(status=display_status, detail="")
+
+            except Exception as e:
+                pass
+
+            time.sleep(1)
+
+    except Exception as e:
+        save_status(status="crashed", detail=str(e)[:80])
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    run_relentless_headless_bot()
+'''
+
+# Always rewrite bot
+with open(BOT_FILE, "w") as f:
+    f.write(BOT_CODE)
+
+# Auto clear stale pid on error states
+status = load_status()
+if any(x in status.get("status", "") for x in ["crashed", "driver_error"]):
+    if os.path.exists("aternos_bot.pid"):
+        os.remove("aternos_bot.pid")
+
+if not is_bot_running():
+    start_bot()
+
+# --- UI ---
+st.set_page_config(page_title="Aternos Bot Dashboard", page_icon="⚡", layout="centered")
+st.title("⚡ Aternos Bot Dashboard")
+st.caption("Refreshes every 3 seconds.")
+
+status = load_status()
+phase = status.get("status", "starting")
+detail = status.get("detail", "")
+online_elapsed = status.get("online_elapsed", 0)
+
+st.caption(f"🔧 Raw status: `{phase}` | bot process: `{is_bot_running()}`")
+st.divider()
+
+# --- Status Card ---
+if phase == "Online":
+    elapsed_min = online_elapsed // 60
+    elapsed_sec = online_elapsed % 60
+    st.success(f"🟢 Server is **Online**")
+    st.info(f"⏱️ Online for: **{elapsed_min}m {elapsed_sec}s** &nbsp;|&nbsp; {detail}")
+
+elif phase == "restarting":
+    st.warning(f"🔄 **Restarting server...** 30 minutes reached.")
+
+elif phase == "clicked_button":
+    st.success(f"✅ **{detail}**")
+
+elif "queue" in phase.lower():
+    st.warning(f"🕐 **{phase}**")
+
+elif phase in ["Loading", "Preparing", "Starting"]:
+    st.info(f"⏳ Server is **{phase}**...")
+
+elif phase == "Offline":
+    st.error(f"🔴 Server is **Offline** — attempting to start...")
+
+elif phase == "monitoring":
+    st.info(f"👀 Monitoring Aternos... waiting for status.")
+
+elif phase == "loading_page":
+    st.info("🌐 Loading Aternos page...")
+
+elif phase == "installing_driver":
+    st.info("📦 Installing ChromeDriver...")
+
+elif phase == "driver_error":
+    st.error(f"❌ ChromeDriver error: {detail}")
+
+elif phase == "crashed":
+    st.error(f"💀 Bot crashed: {detail}")
+
+elif phase == "starting":
+    st.info("🚀 Bot is starting up...")
+
+else:
+    st.info(f"🤖 {phase} {detail}")
+
+st.divider()
+st.subheader("📋 Server Info")
+col1, col2 = st.columns(2)
+col1.metric("Server", "meracraft-ox3w")
+col2.metric("Restart Interval", "30 minutes")
+
+time.sleep(3)
+st.rerun()
