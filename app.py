@@ -147,7 +147,7 @@ def run_relentless_headless_bot():
                 status_elements = driver.find_elements(By.CLASS_NAME, "statuslabel-label")
                 status = status_elements[0].text.strip() if status_elements else ""
 
-                # --- ONLY CHANGE: skip any button whose text is exactly "1" ---
+                # Skip the +1 button (renders as text "1" in DOM)
                 confirms = driver.find_elements(By.CSS_SELECTOR, ".btn-success, #start")
                 for btn in confirms:
                     if btn.is_displayed():
