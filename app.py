@@ -4,9 +4,11 @@ import os
 import json
 import subprocess
 import sys
+import requests
 
 STATUS_FILE = "aternos_status.json"
 BOT_FILE = "aternos_bot.py"
+WANDERBT_API = "https://windzer.alwaysdata.net"
 
 def load_status():
     try:
@@ -16,6 +18,13 @@ def load_status():
     except:
         pass
     return {"status": "starting", "detail": "", "online_elapsed": 0, "current_state": ""}
+
+def load_wanderbt_status():
+    try:
+        r = requests.get(WANDERBT_API, timeout=5)
+        return r.json()
+    except:
+        return {"status": "Unreachable", "raw_status": "❌ Cannot reach bot", "uptime": "—", "bot": "WanderBt"}
 
 def is_bot_running():
     if not os.path.exists("aternos_bot.pid"):
@@ -147,7 +156,6 @@ def run_relentless_headless_bot():
                 status_elements = driver.find_elements(By.CLASS_NAME, "statuslabel-label")
                 status = status_elements[0].text.strip() if status_elements else ""
 
-                # Skip the +1 button (renders as text "1" in DOM)
                 confirms = driver.find_elements(By.CSS_SELECTOR, ".btn-success, #start")
                 for btn in confirms:
                     if btn.is_displayed():
@@ -155,7 +163,7 @@ def run_relentless_headless_bot():
                         if btn_text == "1":
                             continue
                         driver.execute_script("arguments[0].click();", btn)
-                        save_status(status="clicked_button", detail=f"Clicked: {btn_text or 'Start/Confirm'}", current_state=f"Clicked: {btn_text or 'Start/Confirm'}")
+                        save_status(status="clicked_button", detail=f"Clicked: {btn_text or \'Start/Confirm\'}", current_state=f"Clicked: {btn_text or \'Start/Confirm\'}")
                         online_start_time = None
 
                 if status == "Online":
@@ -218,27 +226,31 @@ if not is_bot_running():
     start_bot()
 
 # --- UI ---
-st.set_page_config(page_title="Aternos Bot Dashboard", page_icon="⚡", layout="centered")
-st.title("⚡ Aternos Bot Dashboard")
+st.set_page_config(page_title="Meracraft Dashboard", page_icon="⚡", layout="centered")
+st.title("⚡ Meracraft Dashboard")
 st.caption("Refreshes every 3 seconds.")
 
+# --- Load both statuses ---
 status = load_status()
+wanderbt = load_wanderbt_status()
+
 phase = status.get("status", "starting")
 detail = status.get("detail", "")
 online_elapsed = status.get("online_elapsed", 0)
 current_state = status.get("current_state", "")
 
-st.caption(f"🔧 Raw status: `{phase}` | bot process: `{is_bot_running()}`")
+st.caption(f"🔧 Aternos bot process: `{is_bot_running()}`")
+
+# --- Aternos Section ---
+st.subheader("🌐 Aternos Server")
 
 if current_state:
     st.info(f"📡 Current State: **{current_state}**")
 
-st.divider()
-
 if phase == "Online":
     elapsed_min = online_elapsed // 60
     elapsed_sec = online_elapsed % 60
-    st.success(f"🟢 Server is **Online**")
+    st.success("🟢 Server is **Online**")
     st.info(f"⏱️ Online for: **{elapsed_min}m {elapsed_sec}s** &nbsp;|&nbsp; {detail}")
 elif phase == "restarting":
     st.warning("🔄 **Restarting server...** 30 minutes reached.")
@@ -268,6 +280,33 @@ else:
     st.info(f"🤖 {phase} {detail}")
 
 st.divider()
+
+# --- WanderBt Section ---
+st.subheader("🤖 WanderBt (Minecraft Bot)")
+
+wstatus = wanderbt.get("status", "Unreachable")
+wraw = wanderbt.get("raw_status", "—")
+wuptime = wanderbt.get("uptime", "—")
+wbot = wanderbt.get("bot", "WanderBt")
+
+if wstatus == "Connected":
+    st.success(f"{wraw}")
+elif wstatus == "Sleeping":
+    st.info(f"{wraw}")
+elif wstatus == "Connecting":
+    st.warning(f"{wraw}")
+elif wstatus == "Offline":
+    st.error(f"{wraw}")
+else:
+    st.error(f"{wraw}")
+
+col1, col2 = st.columns(2)
+col1.metric("Bot Name", wbot)
+col2.metric("Uptime", wuptime)
+
+st.divider()
+
+# --- Server Info ---
 st.subheader("📋 Server Info")
 col1, col2 = st.columns(2)
 col1.metric("Server", "meracraft-ox3w")
