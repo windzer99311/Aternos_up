@@ -8,7 +8,7 @@ import requests
 
 STATUS_FILE = "aternos_status.json"
 BOT_FILE = "aternos_bot.py"
-WANDERBT_API = "https://windzer.alwaysdata.net"
+WANDERBT_API = "https://windzer007.alwaysdata.net"
 
 def load_status():
     try:
