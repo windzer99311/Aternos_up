@@ -15,7 +15,7 @@ def load_status():
                 return json.load(f)
     except:
         pass
-    return {"status": "starting", "detail": "", "online_elapsed": 0}
+    return {"status": "starting", "detail": "", "online_elapsed": 0, "current_state": ""}
 
 def is_bot_running():
     if not os.path.exists("aternos_bot.pid"):
@@ -56,12 +56,17 @@ SERVER_NAME = "meracraft-ox3w"
 RESTART_INTERVAL = 30 * 60
 STATUS_FILE = "aternos_status.json"
 
-def save_status(status="", detail="", online_elapsed=0):
+def save_status(status="", detail="", online_elapsed=0, current_state=""):
     with open(STATUS_FILE, "w") as f:
-        json.dump({"status": status, "detail": detail, "online_elapsed": int(online_elapsed)}, f)
+        json.dump({
+            "status": status,
+            "detail": detail,
+            "online_elapsed": int(online_elapsed),
+            "current_state": current_state
+        }, f)
         f.flush()
         os.fsync(f.fileno())
-    print(f"[BOT] status={status} | detail={detail}")
+    print(f"[BOT] status={status} | current_state={current_state} | detail={detail}")
 
 def get_chrome_version():
     cmds = [
@@ -82,15 +87,13 @@ def get_chrome_version():
                 return version
         except:
             continue
-    print("[BOT] Could not detect Chrome version, using default")
     return None
 
 def run_relentless_headless_bot():
-    print("Starting bot...")
-    save_status(status="detecting_chrome")
+    save_status(status="detecting_chrome", current_state="Detecting Chrome version...")
 
     chrome_version = get_chrome_version()
-    save_status(status="installing_driver")
+    save_status(status="installing_driver", current_state="Installing ChromeDriver...")
 
     options = Options()
     options.add_argument("--headless=new")
@@ -110,13 +113,13 @@ def run_relentless_headless_bot():
         service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=options)
     except Exception as e:
-        save_status(status="driver_error", detail=str(e)[:80])
+        save_status(status="driver_error", detail=str(e)[:80], current_state="Driver install failed")
         return
 
     online_start_time = None
 
     try:
-        save_status(status="loading_page")
+        save_status(status="loading_page", current_state="Loading Aternos...")
         driver.get("https://aternos.org/servers/")
 
         if os.path.exists(COOKIE_FILE):
@@ -130,7 +133,7 @@ def run_relentless_headless_bot():
                         pass
 
         driver.refresh()
-        save_status(status="monitoring", detail="Watching Aternos...")
+        save_status(status="monitoring", current_state="Monitoring Aternos...")
 
         while True:
             try:
@@ -149,8 +152,7 @@ def run_relentless_headless_bot():
                     if btn.is_displayed():
                         driver.execute_script("arguments[0].click();", btn)
                         btn_text = btn.text.strip() or "Start/Confirm"
-                        print(f"Clicked: {btn_text}")
-                        save_status(status="clicked_button", detail=f"Clicked: {btn_text}")
+                        save_status(status="clicked_button", detail=f"Clicked: {btn_text}", current_state=f"Clicked: {btn_text}")
                         online_start_time = None
 
                 if status == "Online":
@@ -164,17 +166,17 @@ def run_relentless_headless_bot():
                         restart_btn = driver.find_elements(By.ID, "restart")
                         if restart_btn and restart_btn[0].is_displayed():
                             driver.execute_script("arguments[0].click();", restart_btn[0])
-                            save_status(status="restarting", detail="30 min reached, restarting...")
+                            save_status(status="restarting", current_state="Restarting — 30 min reached")
                             online_start_time = None
                     else:
                         save_status(
                             status="Online",
                             detail=f"Restart in {int(remaining//60)}m {int(remaining%60)}s",
-                            online_elapsed=int(elapsed)
+                            online_elapsed=int(elapsed),
+                            current_state="Online"
                         )
                 else:
-                    if status != "Online":
-                        online_start_time = None
+                    online_start_time = None
 
                     display_status = status
                     if "Waiting in queue" in status:
@@ -185,7 +187,7 @@ def run_relentless_headless_bot():
                         display_status = f"Waiting in queue [{pos_text}] ({time_text})"
 
                     if display_status:
-                        save_status(status=display_status, detail="")
+                        save_status(status=display_status, current_state=display_status)
 
             except Exception as e:
                 pass
@@ -193,7 +195,7 @@ def run_relentless_headless_bot():
             time.sleep(1)
 
     except Exception as e:
-        save_status(status="crashed", detail=str(e)[:80])
+        save_status(status="crashed", detail=str(e)[:80], current_state="Crashed")
     finally:
         driver.quit()
 
@@ -201,11 +203,9 @@ if __name__ == "__main__":
     run_relentless_headless_bot()
 '''
 
-# Always rewrite bot
 with open(BOT_FILE, "w") as f:
     f.write(BOT_CODE)
 
-# Auto clear stale pid on error states
 status = load_status()
 if any(x in status.get("status", "") for x in ["crashed", "driver_error"]):
     if os.path.exists("aternos_bot.pid"):
@@ -223,8 +223,14 @@ status = load_status()
 phase = status.get("status", "starting")
 detail = status.get("detail", "")
 online_elapsed = status.get("online_elapsed", 0)
+current_state = status.get("current_state", "")
 
 st.caption(f"🔧 Raw status: `{phase}` | bot process: `{is_bot_running()}`")
+
+# --- Current State Banner (always visible) ---
+if current_state:
+    st.info(f"📡 Current State: **{current_state}**")
+
 st.divider()
 
 if phase == "Online":
@@ -233,7 +239,7 @@ if phase == "Online":
     st.success(f"🟢 Server is **Online**")
     st.info(f"⏱️ Online for: **{elapsed_min}m {elapsed_sec}s** &nbsp;|&nbsp; {detail}")
 elif phase == "restarting":
-    st.warning(f"🔄 **Restarting server...** 30 minutes reached.")
+    st.warning("🔄 **Restarting server...** 30 minutes reached.")
 elif phase == "clicked_button":
     st.success(f"✅ **{detail}**")
 elif "queue" in phase.lower():
@@ -241,9 +247,9 @@ elif "queue" in phase.lower():
 elif phase in ["Loading", "Preparing", "Starting"]:
     st.info(f"⏳ Server is **{phase}**...")
 elif phase == "Offline":
-    st.error(f"🔴 Server is **Offline** — attempting to start...")
+    st.error("🔴 Server is **Offline** — attempting to start...")
 elif phase == "monitoring":
-    st.info(f"👀 Monitoring Aternos...")
+    st.info("👀 Monitoring Aternos...")
 elif phase == "loading_page":
     st.info("🌐 Loading Aternos page...")
 elif phase == "detecting_chrome":
