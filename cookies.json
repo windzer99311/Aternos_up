@@ -1,0 +1,60 @@
+[
+  {
+    "name": "_ga",
+    "value": "GA1.1.774988791.1777839721",
+    "domain": ".aternos.org",
+    "path": "/",
+    "expires": 1812399721.081171,
+    "size": 29,
+    "httpOnly": false,
+    "secure": false,
+    "session": false,
+    "priority": "Medium",
+    "sourceScheme": "Secure",
+    "sameParty": false
+  },
+  {
+    "name": "ATERNOS_LANGUAGE",
+    "value": "en",
+    "domain": "aternos.org",
+    "path": "/",
+    "expires": 1812399717.783197,
+    "size": 18,
+    "httpOnly": false,
+    "secure": false,
+    "session": false,
+    "sameSite": "Lax",
+    "priority": "Medium",
+    "sourceScheme": "Secure",
+    "sameParty": false
+  },
+  {
+    "name": "ATERNOS_SESSION",
+    "value": "0eChoB0N2nKhaC7zyQlxjFbnUfw4aZnKqBGNU7CQrFV1YtRjUBu47UMfqf4t1XRT65ZPxgJS1Q3th5OmyhuzQ7foYSP9qiYGypup",
+    "domain": "aternos.org",
+    "path": "/",
+    "expires": 1780431740.770213,
+    "size": 115,
+    "httpOnly": true,
+    "secure": false,
+    "session": false,
+    "sameSite": "Lax",
+    "priority": "Medium",
+    "sourceScheme": "Secure",
+    "sameParty": false
+  },
+  {
+    "name": "_ga_70M94GH0FD",
+    "value": "GS2.1.s1777839721$o1$g1$t1777839740$j41$l0$h0",
+    "domain": ".aternos.org",
+    "path": "/",
+    "expires": 1812399740.781427,
+    "size": 59,
+    "httpOnly": false,
+    "secure": false,
+    "session": false,
+    "priority": "Medium",
+    "sourceScheme": "Secure",
+    "sameParty": false
+  }
+]
